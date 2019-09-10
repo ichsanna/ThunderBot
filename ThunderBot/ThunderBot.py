@@ -74,15 +74,15 @@ class ThunderBot(BaseAgent):
             angle_front_to_target -= 360
         # print (angle_front_to_target)
         # print (angle_between_bot_and_target)
-        if abs(angle_front_to_target) > 90:
+        if abs(angle_front_to_target) > 120:
             self.controller.handbrake = True
         else:
             self.controller.handbrake = False
-        if angle_front_to_target < -10:
+        if angle_front_to_target < -5:
             # If the target is more than 10 degrees right from the centre, steer left
             self.controller.steer = -1
             self.controller.boost = False
-        elif angle_front_to_target > 10:
+        elif angle_front_to_target > 5:
             # If the target is more than 10 degrees left from the centre, steer right
             self.controller.steer = 1
             self.controller.boost = False
@@ -111,7 +111,7 @@ class ThunderBot(BaseAgent):
             angle_front_to_target -= 360
         self.distance_to_ball = math.sqrt((self.ball_pos.x-self.bot_pos.x)**2+(self.ball_pos.y-self.bot_pos.y)**2)
         # print (self.distance_to_ball)
-        if (self.boost < 20 and (angle_front_to_target > 30 or self.distance_to_ball > 1000)) :
+        if (self.boost < 20 and (angle_front_to_target > 30 or (self.distance_to_ball > 1000 and self.ball_pos.x!=0 and self.ball_pos.y!=0))) :
             target = "boost"
             boost_target = self.find_boost()
             #if (time.time() % 2 < 0.1):
