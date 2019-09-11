@@ -72,15 +72,17 @@ class ThunderBot(BaseAgent):
             self.controller.boost = False
         else:
             # If the target is less than 5 degrees from the center, steer straight
-            if (self.distance_to_ball<500):
+            if (self.distance_to_ball<500 and 100 < self.ball_pos.z < 250):
                 self.controller.jump = True
             elif (self.boost > 0):
                 self.controller.jump = False
                 self.controller.boost = True
-            self.controller.steer = 0
+            self.controller.steer = 0       
 
     def get_output(self, packet: GameTickPacket) -> SimpleControllerState:
         # Update game data variables
+        self.game_info = packet.game_info
+        print (self.game_info.is_kickoff_pause)
         my_car = packet.game_cars[self.index]
         human_car = packet.game_cars[self.index+1]
         self.bot_yaw = my_car.physics.rotation.yaw
@@ -91,28 +93,37 @@ class ThunderBot(BaseAgent):
         self.ball_pos = the_ball.physics.location
         self.boost = my_car.boost
         target = "none"
+        bot_loc = {"x": self.bot_pos.x,"y": self.bot_pos.y,"z": self.bot_pos.z}
 
         self.angle_bot_to_ball = self.calculate_angle(self.ball_pos.x,self.ball_pos.y)
-        print (self.angle_bot_to_ball)
-        # print (angle_between_bot_and_target)
+        # print (self.angle_bot_to_ball)
         self.distance_to_ball = math.sqrt((self.ball_pos.x-self.bot_pos.x)**2+(self.ball_pos.y-self.bot_pos.y)**2)
-        # print (self.distance_to_ball)
         if (self.boost < 20 and (self.angle_bot_to_ball > 30 or (self.distance_to_ball > 1000 and self.ball_pos.x!=0 and self.ball_pos.y!=0))) :
             target = "boost"
             boost_target = self.find_boost()
-            self.aim(boost_target.x,boost_target.y)
+            target_loc = {"x": boost_target.x,"y": boost_target.y,"z": boost_target.z}
         else:
             if (self.bot_pos.y>self.ball_pos.y):
                 target = "own goal"
-                self.aim(self.goal_own["x"],self.goal_own["y"])
+                target_loc = {"x": self.goal_own["x"], "y": self.goal_own["y"],"z": self.goal_own["z"]}
             else:
                 target = "ball"
-                self.aim(self.ball_pos.x, self.ball_pos.y)
+                target_loc = {"x": self.ball_pos.x, "y": self.ball_pos.y, "z": self.ball_pos.z}
+        self.aim(target_loc["x"],target_loc["y"])
+        # print (self.ball_pos.z)
         self.controller.throttle = 1
         self.renderer.begin_rendering()
         self.renderer.draw_string_2d(2, 2, 2, 2, target, self.renderer.white())
         self.renderer.draw_string_2d(2, 40, 2, 2, str(self.boost), self.renderer.white())
+        self.renderer.draw_line_3d((bot_loc["x"],bot_loc["y"],bot_loc["z"]),(target_loc["x"],target_loc["y"],target_loc["z"]),self.renderer.create_color(255, 200,200, 0))
         self.renderer.end_rendering()
+        
+        # ball_prediction = self.get_ball_prediction_struct()
+        # if (ball_prediction is not None) and (time.time() % 5 < 1):
+        #     for i in range(0, ball_prediction.num_slices):
+        #         prediction_slice = ball_prediction.slices[i]
+        #         location = prediction_slice.physics.location
+        #         print ("At time {}, the ball will be at ({}, {}, {})".format(prediction_slice.game_seconds, location.x, location.y, location.z))
         # print (human_car.physics.rotation.yaw)
         # print (human_car.physics.location)
         return self.controller
