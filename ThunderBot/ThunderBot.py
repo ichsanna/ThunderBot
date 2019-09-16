@@ -30,6 +30,10 @@ class ThunderBot(BaseAgent):
             angle_front_to_target -= 360
         return angle_front_to_target
 
+    def calculate_distance(self,x1,y1,x2,y2):
+        return math.sqrt((x2-x1)**2+(y2-y1)**2)
+
+
     def find_boost(self):
         field_info = self.get_field_info()
         self.boost_locations = field_info.boost_pads
@@ -49,11 +53,12 @@ class ThunderBot(BaseAgent):
         for i in range(len(boost_loc)):
             angle_bot_to_boost = self.calculate_angle(boost_loc[i].location.x,boost_loc[i].location.y)
             multiplier = math.sin(angle_bot_to_boost/2)
-            boost_distance = math.sqrt((boost_loc[i].location.x-self.bot_pos.x)**2+(boost_loc[i].location.y-self.bot_pos.y)**2)
+            boost_distance = self.calculate_distance(self.bot_pos.x,self.bot_pos.y,boost_loc[i].location.x,boost_loc[i].location.y)
             boost_distance*=abs(multiplier)
             if (boost_distance<min_value):
                 min_value=boost_distance
                 min_loc=i
+        # self.boost_locked = boost_loc[min_loc].location
         return boost_loc[min_loc].location
 
     def aim(self, target_x, target_y):
@@ -97,7 +102,7 @@ class ThunderBot(BaseAgent):
 
         self.angle_bot_to_ball = self.calculate_angle(self.ball_pos.x,self.ball_pos.y)
         # print (self.angle_bot_to_ball)
-        self.distance_to_ball = math.sqrt((self.ball_pos.x-self.bot_pos.x)**2+(self.ball_pos.y-self.bot_pos.y)**2)
+        self.distance_to_ball = self.calculate_distance(self.bot_pos.x,self.bot_pos.y,self.ball_pos.x,self.ball_pos.y)
         if (self.boost < 20 and (self.angle_bot_to_ball > 30 or (self.distance_to_ball > 1000 and self.ball_pos.x!=0 and self.ball_pos.y!=0))) :
             target = "boost"
             boost_target = self.find_boost()
