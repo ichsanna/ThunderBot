@@ -25,10 +25,10 @@ class ThunderBot(BaseAgent):
         self.goal_opponent = {"x": 0,"y": 5120,"z": 642}
         if (self.team==0):
             self.goal_own["y"]*=-1
-            self.target_loc_kickoff = {"x": 0,"y": -2816,"z": 70}
+            self.target_loc_kickoff = {"x": 0,"y": -2000,"z": 70}
         elif (self.team==1):
             self.goal_opponent["y"]*=-1
-            self.target_loc_kickoff = {"x": 0,"y": 2816,"z": 70}
+            self.target_loc_kickoff = {"x": 0,"y": 2000,"z": 70}
         self.initialized = True
         
     def calculate_angle(self,target_x, target_y):
@@ -139,9 +139,13 @@ class ThunderBot(BaseAgent):
                 self.target_loc = {"x": self.target_loc_kickoff["x"], "y": self.target_loc_kickoff["y"], "z": self.target_loc_kickoff["z"]}
         elif (pos==5):
             self.target_loc = {"x": self.ball_pos.x, "y": self.ball_pos.y, "z": self.ball_pos.z}
-            if self.distance_to_ball > 2000:
+            if self.distance_to_ball > 2000 and self.bot_velocity>1200:
                 self.should_dodge = True
-        if self.distance_to_ball < 250:
+                self.controller.boost = False
+            else:
+                self.should_dodge = False
+                self.controller.boost = True
+        if self.distance_to_ball < 500 and abs(self.angle_bot_to_ball)<5:
             self.should_dodge = True
         self.check_for_dodge(self.ball_pos.x, self.ball_pos.y)  
 
@@ -174,6 +178,7 @@ class ThunderBot(BaseAgent):
         self.controller.pitch = 0
         self.controller.roll = 0
         self.controller.throttle = 1
+        self.should_dodge = False
         if (self.game_info.is_kickoff_pause):
             if (self.bot_pos.x==-2048 and self.bot_pos.y==-2560) or (self.bot_pos.x==2048 and self.bot_pos.y==2560):
                 self.kickoff_type = 1
@@ -199,7 +204,7 @@ class ThunderBot(BaseAgent):
                 target = "ball"
                 self.target_loc = {"x": self.ball_pos.x, "y": self.ball_pos.y, "z": self.ball_pos.z}
             self.distance_to_target = self.calculate_distance(self.bot_pos.x,self.bot_pos.y,self.target_loc["x"],self.target_loc["y"])
-            if self.distance_to_ball < 500 and self.bot_pos.z<200:
+            if self.distance_to_ball < 500 and self.ball_pos.z<400 and self.bot_pos.z<200:
                 self.should_dodge = True
             self.check_for_dodge(self.ball_pos.x, self.ball_pos.y)      
             if (self.bot_pos.z>200):
@@ -207,8 +212,8 @@ class ThunderBot(BaseAgent):
         self.aim(self.target_loc["x"],self.target_loc["y"])
         self.renderer.begin_rendering()
         # self.renderer.draw_string_2d(2, 0, 2, 2, str(self.bot_velocity), self.renderer.white())
-        self.renderer.draw_string_2d(2, 40, 2, 2, str(self.bot_pos2), self.renderer.white())
-        # self.renderer.draw_string_2d(2, 80, 2, 2, str(self.bot_boost), self.renderer.white())
+        self.renderer.draw_string_2d(2, 40, 2, 2, str(self.distance_to_ball), self.renderer.white())
+        self.renderer.draw_string_2d(2, 80, 2, 2, str(self.game_info.is_kickoff_pause), self.renderer.white())
         self.renderer.draw_line_3d((bot_loc["x"],bot_loc["y"],bot_loc["z"]),(self.target_loc["x"],self.target_loc["y"],self.target_loc["z"]),self.renderer.create_color(255, 200,200, 0))
         self.renderer.end_rendering()
         # ball_prediction = self.get_ball_prediction_struct()
