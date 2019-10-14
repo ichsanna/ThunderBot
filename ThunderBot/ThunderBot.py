@@ -2,6 +2,7 @@ from rlbot.agents.base_agent import BaseAgent, SimpleControllerState
 from rlbot.utils.structures.game_data_struct import GameTickPacket
 import math
 import time
+import copy
 
 
 class ThunderBot(BaseAgent):
@@ -19,17 +20,23 @@ class ThunderBot(BaseAgent):
         self.initialized = False
         self.kickoff_type = 0
         self.target_loc = {"x": 0,"y": 0,"z": 0}
+        self.next_chase_time = 0
+        self.kickoff_side_modifier = 0
+        self.kickoff_back_side_modifier = 0
+        self.target_loc_kickoff_acquired = False
+        self.distance_to_target = None
+        self.test = 0
 
     def initialize(self):
         self.goal_own = {"x": 0,"y": 5120,"z": 642}
-        self.goal_opponent = {"x": 0,"y": 5120,"z": 642}
+        self.goal_opponent = copy.deepcopy(self.goal_own)
         if (self.team==0):
             self.goal_own["y"]*=-1
             self.target_loc_kickoff = {"x": 0,"y": -2000,"z": 70}
         elif (self.team==1):
             self.goal_opponent["y"]*=-1
             self.target_loc_kickoff = {"x": 0,"y": 2000,"z": 70}
-        self.initialized = True
+        self.initialized = True        
         
     def calculate_angle(self,target_x, target_y):
         angle_between_bot_and_target = math.atan2(target_y - self.bot_pos.y, target_x - self.bot_pos.x)
@@ -47,7 +54,11 @@ class ThunderBot(BaseAgent):
         return math.sqrt(x**2+y**2)
 
     def calculate_time_to_impact(self,distance,speed_a_x,speed_a_y,speed_b_x,speed_b_y):
-        return distance/(self.calculate_velocity(speed_a_x+speed_b_x,speed_a_y+speed_b_y))
+        velocity = self.calculate_velocity(speed_a_x+speed_b_x,speed_a_y+speed_b_y)
+        if (velocity!=0):
+            return distance/(velocity)
+        else:
+            return 10000
 
     def find_boost(self):
         field_info = self.get_field_info()
@@ -67,12 +78,10 @@ class ThunderBot(BaseAgent):
             boost_loc=self.big_boost_locations
         for i in range(len(boost_loc)):
             angle_bot_to_boost = self.calculate_angle(boost_loc[i].location.x,boost_loc[i].location.y)
-            multiplier = math.sin(abs(angle_bot_to_boost/2))
-            boost_distance = self.calculate_distance(self.bot_pos.x,self.bot_pos.y,boost_loc[i].location.x,boost_loc[i].location.y)
-            boost_distance*=abs(multiplier**3)
+            boost_distance = self.calculate_distance(self.bot_pos.x,self.bot_pos.y,boost_loc[i].location.x,boost_loc[i].location.y)*math.sin(abs(angle_bot_to_boost/2))
             if (boost_distance<min_value):
-                min_value=boost_distance
-                min_loc=i
+                min_value=copy.deepcopy(boost_distance)
+                min_loc=copy.deepcopy(i)
         return boost_loc[min_loc].location
 
     def aim(self, target_x, target_y):
@@ -92,9 +101,9 @@ class ThunderBot(BaseAgent):
         else:
             # If the target is less than 5 degrees from the center, steer straight
             if (abs(self.bot_pitch)<0.1 and self.bot_roll==0 and self.bot_wheel_contact):                
-                if (self.distance_to_target>7000 and 1500<self.bot_velocity<1800) or (self.boost==0 and self.bot_velocity>1000):
+                if ((1500<self.bot_velocity<1800) or (self.boost==0 and self.bot_velocity>800)) and self.distance_to_target/self.bot_velocity>2:
                     self.should_dodge = True
-                elif (self.boost > 0) and self.bot_velocity<2250:
+                elif (self.boost > 0) and (self.bot_velocity < 2250):
                     self.controller.boost = True
             self.controller.steer = angle_bot_to_target/10
 
@@ -129,27 +138,43 @@ class ThunderBot(BaseAgent):
 
     def kickoff(self,pos):
         if (pos==1 or pos==2):
-            self.target_loc = {"x": self.ball_pos.x, "y": self.ball_pos.y, "z": self.ball_pos.z}
+            if self.team==0:
+                self.kickoff_side_modifier=-90
+            else:
+                self.kickoff_side_modifier=+90
+            self.target_loc = {"x": self.ball_pos.x, "y": self.ball_pos.y+self.kickoff_side_modifier, "z": self.ball_pos.z}
         elif (pos==3 or pos==4):
             if (self.bot_pos.x-20<self.target_loc_kickoff["x"]<self.bot_pos.x+20 and self.bot_pos.y-20<self.target_loc_kickoff["y"]<self.bot_pos.y+20):
                 self.target_loc_kickoff_acquired = True
+            if self.team==0:
+                if (pos==3):
+                    self.kickoff_back_side_modifier=40
+                else:
+                    self.kickoff_back_side_modifier=-40
+            else:
+                if (pos==3):
+                    self.kickoff_back_side_modifier=-40
+                else:
+                    self.kickoff_back_side_modifier=40
             if (self.target_loc_kickoff_acquired):
-                self.target_loc = {"x": self.ball_pos.x, "y": self.ball_pos.y, "z": self.ball_pos.z}
+                self.target_loc = {"x": self.ball_pos.x+self.kickoff_back_side_modifier, "y": self.ball_pos.y, "z": self.ball_pos.z}
             else:
                 self.target_loc = {"x": self.target_loc_kickoff["x"], "y": self.target_loc_kickoff["y"], "z": self.target_loc_kickoff["z"]}
         elif (pos==5):
             self.target_loc = {"x": self.ball_pos.x, "y": self.ball_pos.y, "z": self.ball_pos.z}
-            if self.distance_to_ball > 2000 and self.bot_velocity>1200:
+            if self.distance_to_ball > 1000 and self.bot_velocity>1700:
                 self.should_dodge = True
                 self.controller.boost = False
-            else:
+            else :
                 self.should_dodge = False
                 self.controller.boost = True
-        if self.distance_to_ball < 500 and abs(self.angle_bot_to_ball)<5:
+        if self.distance_to_ball < 650:
             self.should_dodge = True
         self.check_for_dodge(self.ball_pos.x, self.ball_pos.y)  
 
     def get_output(self, packet: GameTickPacket) -> SimpleControllerState:
+        self.test+=1
+        print (self.test)
         if (self.initialized==False):
             self.initialize()
         # Update game data variables
@@ -174,12 +199,15 @@ class ThunderBot(BaseAgent):
         bot_loc = {"x": self.bot_pos.x,"y": self.bot_pos.y,"z": self.bot_pos.z}
         self.angle_bot_to_ball = self.calculate_angle(self.ball_pos.x,self.ball_pos.y)
         self.distance_to_ball = self.calculate_distance(self.bot_pos.x,self.bot_pos.y,self.ball_pos.x,self.ball_pos.y)
+        self.distance_to_own_goal = self.calculate_distance(self.bot_pos.x,self.bot_pos.y,self.goal_own["x"],self.goal_own["y"])
         self.controller.jump = False
         self.controller.pitch = 0
         self.controller.roll = 0
         self.controller.throttle = 1
-        self.should_dodge = False
+        self.time_to_ball = self.calculate_time_to_impact(self.distance_to_ball,my_car.physics.velocity.x,my_car.physics.velocity.y,the_ball.physics.velocity.x,the_ball.physics.velocity.y)
+        # print (self.time_to_ball)
         if (self.game_info.is_kickoff_pause):
+            self.should_dodge = False
             if (self.bot_pos.x==-2048 and self.bot_pos.y==-2560) or (self.bot_pos.x==2048 and self.bot_pos.y==2560):
                 self.kickoff_type = 1
             elif (self.bot_pos.x==2048 and self.bot_pos.y==-2560) or (self.bot_pos.x==-2048 and self.bot_pos.y==2560):
@@ -196,17 +224,18 @@ class ThunderBot(BaseAgent):
             # if (self.boost < 20 and (self.angle_bot_to_ball > 30 or (self.distance_to_ball > 1000 and self.ball_pos.x!=0 and self.ball_pos.y!=0))) :
             #     target = "boost"
             #     boost_target = self.find_boost()
-            #     target_loc = {"x": boost_target.x,"y": boost_target.y,"z": boost_target.z}
+            #     self.target_loc = {"x": boost_target.x,"y": boost_target.y,"z": boost_target.z}
             if (self.team==0 and self.bot_pos.y>self.ball_pos.y) or (self.team==1 and self.bot_pos.y<self.ball_pos.y):
                 target = "own goal"
                 self.target_loc = {"x": self.goal_own["x"], "y": self.goal_own["y"],"z": self.goal_own["z"]}
-            else:
+                self.next_chase_time = time.time()+self.distance_to_own_goal/1500
+            elif (time.time()>self.next_chase_time):
                 target = "ball"
                 self.target_loc = {"x": self.ball_pos.x, "y": self.ball_pos.y, "z": self.ball_pos.z}
             self.distance_to_target = self.calculate_distance(self.bot_pos.x,self.bot_pos.y,self.target_loc["x"],self.target_loc["y"])
-            if self.distance_to_ball < 500 and self.ball_pos.z<400 and self.bot_pos.z<200:
+            if self.distance_to_ball < 500 and self.ball_pos.z<400 and 100<self.bot_pos.z<200:
                 self.should_dodge = True
-            self.check_for_dodge(self.ball_pos.x, self.ball_pos.y)      
+            self.check_for_dodge(self.ball_pos.x, self.ball_pos.y)     
             if (self.bot_pos.z>200):
                 self.wheel_recover()
         self.aim(self.target_loc["x"],self.target_loc["y"])
@@ -215,6 +244,7 @@ class ThunderBot(BaseAgent):
         self.renderer.draw_string_2d(2, 40, 2, 2, str(self.distance_to_ball), self.renderer.white())
         self.renderer.draw_string_2d(2, 80, 2, 2, str(self.game_info.is_kickoff_pause), self.renderer.white())
         self.renderer.draw_line_3d((bot_loc["x"],bot_loc["y"],bot_loc["z"]),(self.target_loc["x"],self.target_loc["y"],self.target_loc["z"]),self.renderer.create_color(255, 200,200, 0))
+        self.renderer.draw_line_3d((self.ball_pos.x,self.ball_pos.y,self.ball_pos.z),(self.goal_opponent["x"],self.goal_opponent["y"],self.goal_opponent["z"]),self.renderer.create_color(200, 200,255, 0))
         self.renderer.end_rendering()
         # ball_prediction = self.get_ball_prediction_struct()
         # if (ball_prediction is not None) and (time.time() % 5 < 1):
